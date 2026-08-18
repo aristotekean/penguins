@@ -1,0 +1,11 @@
+[project]
+name = "n0"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "joblib>=1.5.3",
+    "pandas>=3.0.5",
+    "scikit-learn>=1.9.0",
+    "uvicorn[standard]>=0.52.1",
+]
