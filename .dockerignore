@@ -1,0 +1,11 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+__pycache__
+*.pyc
+.venv
+.DS_Store
+penguins.csv
+train.py
+.atl
