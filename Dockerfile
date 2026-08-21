@@ -14,16 +14,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Stage 2: runtime image without uv or build tooling
 FROM python:3.12-slim-bookworm
 
-RUN groupadd --system app && useradd --system --gid app app
-
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY app.py penguin_model.pkl ./
 
 ENV PATH="/app/.venv/bin:$PATH"
-
-USER app
 
 EXPOSE 8000
 
