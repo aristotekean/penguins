@@ -9,15 +9,18 @@ import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-MODEL_PATH = Path(__file__).parent / "penguin_model.pkl"
-
-model = None
+MODEL_PATH = Path(__file__).parent
+modelos = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model
-    model = joblib.load(MODEL_PATH)
+    global modelos
+
+    modelos["randomforest"] = joblib.load(MODEL_PATH / "model_randomforest.pkl")
+    modelos["decisiontree"] = joblib.load(MODEL_PATH / "model_decisiontree.pkl")
+    modelos["logisticregression"] = joblib.load(MODEL_PATH / "model_logisticregression.pkl")
+
     yield
 
 
@@ -26,6 +29,8 @@ app = FastAPI(title="Penguin Species Classifier", version="0.1.0", lifespan=life
 
 class PenguinFeatures(BaseModel):
     """Morphological measurements of a penguin from the Palmer Archipelago."""
+
+    modelo: Literal["randomforest", "decisiontree", "logisticregression"]
 
     bill_length_mm: float = Field(
         gt=0,
@@ -78,8 +83,15 @@ class Prediction(BaseModel):
 
 @app.post("/predict", response_model=Prediction, summary="Predict penguin species")
 def predict(features: PenguinFeatures) -> Prediction:
-    """Classify a penguin as Adelie, Chinstrap, or Gentoo from its measurements."""
-    X = pd.DataFrame([features.model_dump()])
-    species = model.predict(X)[0]
-    probabilities = dict(zip(model.classes_, model.predict_proba(X)[0]))
+
+    if features.modelo not in modelos:
+        raise HTTPException(status_code=400, detail="Modelo no válido")
+
+    modelo = modelos[features.modelo]
+
+    X = pd.DataFrame([features.model_dump(exclude={"modelo"})])
+
+    species = modelo.predict(X)[0]
+    probabilities = dict(zip(modelo.classes_, modelo.predict_proba(X)[0]))
+
     return Prediction(species=species, probabilities=probabilities)
