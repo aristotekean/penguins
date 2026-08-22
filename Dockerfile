@@ -17,10 +17,10 @@ FROM python:3.12-slim-bookworm
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
-COPY app.py penguin_model.pkl ./
+COPY app.py model_decisiontree.pkl model_logisticregression.pkl model_randomforest.pkl ./
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-EXPOSE 8000
+EXPOSE 8025
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8025"]
