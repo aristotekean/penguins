@@ -14,7 +14,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 DATA_PATH = Path(__file__).parent / "penguins.csv"
-MODEL_PATH = Path(__file__).parent / "penguin_model.pkl"
 
 NUMERIC_FEATURES = ["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g"]
 CATEGORICAL_FEATURES = ["island", "sex"]
@@ -73,7 +72,7 @@ def main() -> None:
 
         output_path = Path(f"model_{modelo}.pkl")
         joblib.dump(pipeline, output_path)
-        print(f"Model saved to {MODEL_PATH}")
+        print(f"Model saved")
 
 
 if __name__ == "__main__":
