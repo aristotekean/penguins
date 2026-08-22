@@ -30,7 +30,7 @@ app = FastAPI(title="Penguin Species Classifier", version="0.1.0", lifespan=life
 class PenguinFeatures(BaseModel):
     """Morphological measurements of a penguin from the Palmer Archipelago."""
 
-    modelo: Literal["randomforest", "decisiontree", "logisticregression"]
+    modelo: Literal["randomforest", "decisiontree", "logisticregression"] = Field(description="Modelo a utilizar para la predicción: randomforest, decisiontree, logisticregression", examples=["randomforest"])
 
     bill_length_mm: float = Field(
         gt=0,
@@ -65,6 +65,7 @@ class PenguinFeatures(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
+                    "modelo": "randomforest",
                     "bill_length_mm": 39.1,
                     "bill_depth_mm": 18.7,
                     "flipper_length_mm": 181,
