@@ -1,0 +1,103 @@
+# Pruebas de la API con la extensión REST Client (humao.rest-client).
+# Click en "Send Request" arriba de cada bloque.
+#
+# La forma normal de operar es Swagger: http://localhost:8025/docs
+# Este archivo sirve para repetir siempre las mismas pruebas sin ir clickeando.
+#
+# `version` y `modelo` viajan como query params (así Swagger los muestra
+# como desplegables). Con Remote-SSH y el puerto reenviado, localhost apunta a la VM.
+
+@host = http://localhost:8025
+
+### 1. Estado del servicio y del volumen
+GET {{host}}/health
+
+### 2. Qué versiones ve la API ahora mismo
+GET {{host}}/modelos
+
+### 3. Detalle de una versión: métricas, dataset y entorno
+GET {{host}}/modelos/modelo_v1
+
+### 4. Predecir con la última versión, algoritmo automático
+POST {{host}}/predict?version=latest&modelo=auto
+Content-Type: application/json
+
+{
+  "bill_length_mm": 39.1,
+  "bill_depth_mm": 18.7,
+  "flipper_length_mm": 181,
+  "body_mass_g": 3750,
+  "island": "Torgersen",
+  "sex": "MALE"
+}
+
+### 5. El mismo pingüino contra modelo_v1
+POST {{host}}/predict?version=modelo_v1&modelo=randomforest
+Content-Type: application/json
+
+{
+  "bill_length_mm": 39.1,
+  "bill_depth_mm": 18.7,
+  "flipper_length_mm": 181,
+  "body_mass_g": 3750,
+  "island": "Torgersen",
+  "sex": "MALE"
+}
+
+### 6. El mismo pingüino contra modelo_v2: comparar resultados
+POST {{host}}/predict?version=modelo_v2&modelo=randomforest
+Content-Type: application/json
+
+{
+  "bill_length_mm": 39.1,
+  "bill_depth_mm": 18.7,
+  "flipper_length_mm": 181,
+  "body_mass_g": 3750,
+  "island": "Torgersen",
+  "sex": "MALE"
+}
+
+### 7. Un Gentoo grande
+POST {{host}}/predict?version=latest
+Content-Type: application/json
+
+{
+  "bill_length_mm": 49.6,
+  "bill_depth_mm": 15.0,
+  "flipper_length_mm": 216,
+  "body_mass_g": 4750,
+  "island": "Biscoe",
+  "sex": "MALE"
+}
+
+### 8. Error esperado: versión inexistente (404, lista las disponibles)
+POST {{host}}/predict?version=modelo_v99
+Content-Type: application/json
+
+{
+  "bill_length_mm": 39.1,
+  "bill_depth_mm": 18.7,
+  "flipper_length_mm": 181,
+  "body_mass_g": 3750,
+  "island": "Torgersen",
+  "sex": "MALE"
+}
+
+### 9. Error esperado: medida inválida (422)
+POST {{host}}/predict
+Content-Type: application/json
+
+{
+  "bill_length_mm": -5,
+  "bill_depth_mm": 18.7,
+  "flipper_length_mm": 181,
+  "body_mass_g": 3750,
+  "island": "Torgersen",
+  "sex": "MALE"
+}
+
+### 10. El esquema que arma los desplegables de Swagger
+GET {{host}}/openapi.json
+
+### 11. Vaciar la caché de modelos en memoria
+POST {{host}}/modelos/refresh

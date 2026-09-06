@@ -1,0 +1,50 @@
+name: penguins-taller
+
+services:
+  # Contenedor 1 · el equipo de desarrollo entrena acá
+  jupyter:
+    build:
+      context: .
+      target: jupyter
+    image: penguins-jupyter:2.0.0
+    container_name: penguins-jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      MODELS_DIR: /models
+      DATA_PATH: /workspace/data/penguins.csv
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-taller}
+      AUTOR: ${AUTOR:-equipo-desarrollo}
+    volumes:
+      # Volumen compartido: acá se publican las versiones (lectura/escritura)
+      - modelos:/models
+      # Bind mounts para iterar sin reconstruir la imagen
+      - ./notebooks:/workspace/notebooks:z
+      - ./src:/workspace/src:z
+      - ./scripts:/workspace/scripts:z
+      - ./data:/workspace/data:ro,z
+      # para que `uv add` dentro del contenedor actualice el pyproject del repo
+      - ./pyproject.toml:/workspace/pyproject.toml:z
+    restart: unless-stopped
+
+  # Contenedor 2 · el equipo de pruebas ejecuta los modelos acá
+  api:
+    build:
+      context: .
+      target: api
+    image: penguins-api:2.0.0
+    container_name: penguins-api
+    ports:
+      - "8025:8025"
+    environment:
+      MODELS_DIR: /models
+    volumes:
+      # El mismo volumen, montado de sólo lectura: la API consume, no publica
+      - modelos:/models:ro
+    depends_on:
+      - jupyter
+    restart: unless-stopped
+
+volumes:
+  modelos:
+    name: penguins_modelos
