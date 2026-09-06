@@ -1,7 +1,12 @@
 [project]
-name = "n0"
-version = "0.1.0"
+name = "penguins-taller"
+version = "2.0.0"
+description = "Entrenamiento en Jupyter + inferencia en FastAPI sobre un volumen compartido"
 requires-python = ">=3.12"
+
+# Dependencias comunes a los DOS contenedores.
+# Que ambos resuelvan desde el mismo lockfile es lo que garantiza que la
+# versión de scikit-learn que serializa el .pkl sea la misma que lo deserializa.
 dependencies = [
     "fastapi[standard]>=0.141.1",
     "joblib>=1.5.3",
@@ -9,3 +14,14 @@ dependencies = [
     "scikit-learn>=1.9.0",
     "uvicorn[standard]>=0.52.1",
 ]
+
+# Extras que sólo necesita el contenedor de entrenamiento.
+[dependency-groups]
+jupyter = [
+    "jupyterlab>=4.4",
+    "matplotlib>=3.10",
+    "seaborn>=0.13",
+]
+
+[tool.uv]
+package = false
