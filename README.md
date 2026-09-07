@@ -143,18 +143,18 @@ Cada entrenamiento es una carpeta `modelo_vN` en el volumen, con uno o varios al
 | Riesgo | Solución |
 |--------|----------|
 | Dos entrenamientos piden el mismo número | El número se reserva con `mkdir`, que es atómico; el segundo reintenta con `N+1` |
-| La API lee una versión a medio escribir | `metadata.json` se escribe al final con `os.replace`; la API sólo lista carpetas que ya lo tienen |
+| La API lee una versión a medio escribir | `metadata.json` se escribe al final con `os.replace`; la API solo lista carpetas que ya lo tienen |
 | La API sirve un `.pkl` viejo desde caché | La caché se invalida por `mtime`, con tope de 8 modelos en memoria |
 
 La API **no carga nada al arrancar**: lee el volumen en cada request. Una versión nueva aparece en `GET /modelos` sin reiniciar nada.
 
-> ⚠️ Los `.pkl` sólo se pueden cargar con la **misma versión de scikit-learn** con la que se entrenaron. Si cambiás la dependencia en `pyproject.toml`, reconstruí las dos imágenes y reentrená.
+> ⚠️ Los `.pkl` solo se pueden cargar con la **misma versión de scikit-learn** con la que se entrenaron. Si se cambia la dependencia en `pyproject.toml`, es necesario reconstruir las dos imágenes y volver a entrenar.
 
 ---
 
 ## API de inferencia
 
-Sin interfaz propia: el equipo de pruebas trabaja desde **Swagger** en `/docs` (`/` redirige ahí).
+Sin interfaz propia: el equipo de pruebas trabaja desde **Swagger** en `/docs` (`/` redirige a esa ruta).
 
 | Ruta | Método | Descripción |
 |------|--------|-------------|
@@ -167,7 +167,7 @@ Sin interfaz propia: el equipo de pruebas trabaja desde **Swagger** en `/docs` (
 
 ### `POST /predict`
 
-`version` y `modelo` van como **query params** para que Swagger los dibuje como desplegables. El `enum` se regenera leyendo el volumen en cada llamada a `/openapi.json`: publicás `modelo_v3`, refrescás `/docs` y ya aparece.
+`version` y `modelo` van como **query params** para que Swagger los dibuje como desplegables. El `enum` se regenera leyendo el volumen en cada llamada a `/openapi.json`: al publicar `modelo_v3` y refrescar `/docs`, la nueva versión aparece de inmediato.
 
 | Parámetro | Valores |
 |-----------|---------|
@@ -247,7 +247,7 @@ El `Dockerfile` es multi-stage con dos targets:
 2. **`api`**: `python:3.12-slim` con el `.venv`, `src/` y `api/`. Puerto `8025`, healthcheck sobre `/health`.
 3. **`jupyter`**: `python:3.12-slim` con el `.venv` + JupyterLab y el binario de `uv`. Puerto `8888`.
 
-Ambos montan el volumen `penguins_modelos` en `/models`: lectura/escritura en `jupyter`, **sólo lectura** en `api`.
+Ambos montan el volumen `penguins_modelos` en `/models`: lectura/escritura en `jupyter`, **solo lectura** en `api`.
 
 ### Variables de entorno
 
@@ -265,7 +265,7 @@ JUPYTER_TOKEN=mi-token docker compose up -d --build
 ```bash
 docker compose ps                                  # estado
 docker compose logs -f api                         # logs
-docker compose restart api                         # reiniciar sólo la API
+docker compose restart api                         # reiniciar solo la API
 docker compose exec api ls -la /models             # qué versiones hay
 
 docker compose down                                # baja todo, el volumen se conserva
