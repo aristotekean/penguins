@@ -1,50 +1,52 @@
-# Archivos de control de versiones y Git
+# Git
 .git/
 .gitignore
 
-# Archivos de configuración de Docker
+# Docker files (never needed inside the image)
 .dockerignore
 Dockerfile
 docker-compose*.yml
 
-# Entornos virtuales
+# Virtual environments (dependencies are installed with uv during the build)
 .venv/
 venv/
 ENV/
 
-# Archivos compilados y cachés de Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Python caches at any depth. Note: .dockerignore patterns without **/ only
+# match at the root of the build context, unlike .gitignore.
+**/__pycache__
+**/*.py[cod]
 
-# Notebooks y checkpoints de Jupyter
-.ipynb_checkpoints/
-*.ipynb
+# Jupyter checkpoints (notebooks/ itself IS copied by the jupyter target)
+**/.ipynb_checkpoints
 
-# Pruebas, coberturas y linters
+# Tests and coverage
 tests/
-.pytest_cache/
+**/.pytest_cache
 .coverage
 htmlcov/
 
-# Configuración de editores / IDEs
+# Editors / IDEs
 .vscode/
 .idea/
 
-# Variables de entorno y secretos
+# OS and tooling metadata
+.DS_Store
+.atl/
+
+# Environment variables and secrets
 .env
 .env.*
 
-# Modelos, pesos y binarios pesados (se recomienda descargarlos en runtime o montarlos como volumen)
+# Trained models are served from the shared volume, not baked into the image
 models/
-*.pkl
-*.joblib
-*.onnx
+**/*.pkl
+**/*.joblib
+**/*.onnx
 
-# Datos locales o temporales
-*.log
+# Logs
+**/*.log
 
-# Documentación e información no necesaria en producción
+# Documentation not needed at runtime
 README.md
 docs/
