@@ -1,12 +1,50 @@
-.git
+# Archivos de control de versiones y Git
+.git/
 .gitignore
+
+# Archivos de configuración de Docker
 .dockerignore
-.venv
-__pycache__
+Dockerfile
+docker-compose*.yml
+
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+
+# Archivos compilados y cachés de Python
+__pycache__/
 *.pyc
-.ipynb_checkpoints
+*.pyo
+*.pyd
+
+# Notebooks y checkpoints de Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Pruebas, coberturas y linters
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Configuración de editores / IDEs
+.vscode/
+.idea/
+
+# Variables de entorno y secretos
 .env
+.env.*
+
+# Modelos, pesos y binarios pesados (se recomienda descargarlos en runtime o montarlos como volumen)
 models/
 *.pkl
+*.joblib
+*.onnx
+
+# Datos locales o temporales
+*.log
+
+# Documentación e información no necesaria en producción
 README.md
-tests/
+docs/
