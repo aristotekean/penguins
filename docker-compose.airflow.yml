@@ -107,7 +107,7 @@ services:
       POSTGRES_PASSWORD: penguins
       POSTGRES_DB: penguins
     volumes:
-      - postgres-db-volume:/var/lib/postgresql/data
+      - postgres-penguins-db-volume:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "penguins"]
       interval: 10s
@@ -323,3 +323,4 @@ services:
 
 volumes:
   postgres-db-volume:
+  postgres-penguins-db-volume:
