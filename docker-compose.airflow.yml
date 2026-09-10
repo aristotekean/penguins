@@ -135,13 +135,8 @@ services:
     container_name: penguins-api
     ports:
       - "8025:8025"
-    environment:
-      MODELS_DIR: /models
-    volumes:
-      # El mismo volumen, montado de sólo lectura: la API consume, no publica
-      - modelos:/models:ro
     depends_on:
-      - jupyter
+      - redis
     restart: unless-stopped
 
   airflow-webserver:
