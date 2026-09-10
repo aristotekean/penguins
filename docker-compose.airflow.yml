@@ -127,6 +127,23 @@ services:
       start_period: 30s
     restart: always
 
+  api-penguins:
+    build:
+      context: .
+      target: api
+    image: penguins-api:2.0.0
+    container_name: penguins-api
+    ports:
+      - "8025:8025"
+    environment:
+      MODELS_DIR: /models
+    volumes:
+      # El mismo volumen, montado de sólo lectura: la API consume, no publica
+      - modelos:/models:ro
+    depends_on:
+      - jupyter
+    restart: unless-stopped
+
   airflow-webserver:
     <<: *airflow-common
     command: webserver
