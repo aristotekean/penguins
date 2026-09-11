@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+logs/
 
 # Virtual environments
 .venv/
