@@ -1,0 +1,17 @@
+# Airflow image for the penguins pipeline.
+#
+# Extends the official image with the SAME scikit-learn / joblib versions
+# locked in uv.lock for the API. A pipeline pickled here must be
+# deserializable by penguins-api, and scikit-learn only guarantees that
+# across identical versions. Keep these pins in sync with uv.lock.
+#
+# pandas / pyarrow are lifted because scikit-learn 1.9 requires numpy 2,
+# and the pandas shipped with the base image is compiled against numpy 1.
+FROM apache/airflow:2.10.5-python3.12
+
+USER airflow
+RUN pip install --no-cache-dir \
+    "scikit-learn==1.9.0" \
+    "joblib==1.6.0" \
+    "pandas>=2.2.2,<3" \
+    "pyarrow>=16"
