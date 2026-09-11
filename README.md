@@ -1,6 +1,6 @@
 # 🐧 Penguins Classifier
 
-Clasificador de especies de pingüinos (Palmer Archipelago) con **entrenamiento e inferencia desacoplados**: un contenedor de **JupyterLab** entrena y publica versiones de modelos, y un contenedor de **FastAPI** las descubre y las sirve. Ambos corren en la misma VM con **Docker Compose** y comparten un **volumen de modelos versionados**.
+Clasificador de especies de pingüinos (Palmer Archipelago) con **entrenamiento e inferencia desacoplados**: los modelos se entrenan en un contenedor de **JupyterLab** o, de forma orquestada, en un **DAG de Airflow** que carga los datos en **PostgreSQL**, los preprocesa y entrena desde la tabla procesada. En ambos casos las versiones se publican en un **volumen compartido** y un contenedor de **FastAPI** las descubre y las sirve. Todo corre con **Docker Compose**.
 
 > Repositorio: <https://github.com/aristotekean/penguins>
 
@@ -11,6 +11,7 @@ Clasificador de especies de pingüinos (Palmer Archipelago) con **entrenamiento 
 - [Quick start](#quick-start)
 - [Arquitectura](#arquitectura)
 - [Flujo de datos y entrenamiento](#flujo-de-datos-y-entrenamiento)
+- [Pipeline con Airflow](#pipeline-con-airflow)
 - [Modelos y versionado](#modelos-y-versionado)
 - [API de inferencia](#api-de-inferencia)
 - [Entorno local con uv](#entorno-local-con-uv)
@@ -44,6 +45,26 @@ curl -X POST "http://localhost:8025/predict?version=latest&modelo=randomforest" 
 | API + Swagger | <http://localhost:8025/docs> |
 | JupyterLab | <http://localhost:8888> (token por defecto: `taller`) |
 
+**Variante orquestada con Airflow** (ver [Pipeline con Airflow](#pipeline-con-airflow)):
+
+```bash
+# 1. Levantar Airflow, PostgreSQL y la API
+docker compose -f docker-compose.airflow.yml up -d --build
+
+# 2. Ejecutar el DAG completo (o dispararlo desde la UI en :8080)
+docker compose -f docker-compose.airflow.yml exec airflow-worker \
+  airflow dags test penguins_pipeline
+
+# 3. Probar: la versión nueva ya aparece en /modelos con autor "airflow"
+curl "http://localhost:8025/modelos"
+```
+
+| Servicio | URL |
+|----------|-----|
+| Airflow UI | <http://localhost:8080> (usuario y contraseña: `airflow`) |
+| API + Swagger | <http://localhost:8025/docs> |
+| PostgreSQL de datos | `localhost:5432`, base `penguins`, usuario y contraseña `penguins` |
+
 ---
 
 ## Arquitectura
@@ -75,6 +96,36 @@ flowchart LR
 | `api` | Descubrir versiones y exponer `POST /predict` | `api/app.py`, `src/penguins_ml/registry.py` |
 
 Los dos servicios se construyen desde **un único `Dockerfile`** (targets `api` y `jupyter`) y **el mismo `uv.lock`**. Eso garantiza que la versión de scikit-learn que serializa un `.pkl` sea la misma que lo deserializa.
+
+### Variante orquestada
+
+`docker-compose.airflow.yml` reemplaza a Jupyter por **Airflow + PostgreSQL** como productor de modelos. La API es la misma y el volumen también.
+
+```mermaid
+flowchart LR
+    subgraph COMPOSE["🐳 docker-compose.airflow.yml"]
+        direction LR
+        CSV["📄 data/penguins.csv"]
+        AF["🌀 airflow :8080<br/>DAG penguins_pipeline"]
+        PG[("🐘 postgres-penguins :5432<br/>penguins_raw · penguins_processed")]
+        V[("💾 volumen penguins_modelos<br/>/models")]
+        A["⚡ api :8025<br/>FastAPI · Swagger"]
+
+        CSV -- "load_raw_data" --> AF
+        AF <-- "wipe · load · preprocess · train" --> PG
+        AF -- "escribe modelo_vN/" --> V
+        V -- "lee (ro)" --> A
+    end
+
+    QA["🧪 Equipo de pruebas"] -->|http :8025| A
+```
+
+| Capa | Responsabilidad | Artefactos |
+|------|-----------------|------------|
+| `airflow-*` | Orquestar carga, preprocesamiento y entrenamiento | `dags/penguins_pipeline_dag.py`, `Dockerfile.airflow` |
+| `postgres-penguins` | Persistir los datos crudos y los procesados | Tablas `penguins_raw` y `penguins_processed` |
+| Volumen | El mismo `penguins_modelos`, compartido con la variante de Jupyter | `/models` |
+| `api-penguins` | Misma imagen `penguins-api`, misma lógica de descubrimiento | `api/app.py` |
 
 ---
 
@@ -111,6 +162,73 @@ O por línea de comandos:
 docker compose exec jupyter python scripts/train.py --notas "baseline"
 docker compose exec jupyter python scripts/train.py --algoritmos randomforest --notas "prueba"
 ```
+
+---
+
+## Pipeline con Airflow
+
+`dags/penguins_pipeline_dag.py` define **un único DAG**, `penguins_pipeline`, con cuatro tareas encadenadas. Se ejecuta a demanda (`schedule=None`) desde la UI o por CLI.
+
+```
+wipe_db ──▶ load_raw_data ──▶ preprocess_data ──▶ train_model
+```
+
+| Tarea | Qué hace | Tabla / artefacto |
+|-------|----------|-------------------|
+| `wipe_db` | Elimina **todas** las tablas de la base `penguins` y crea las dos del pipeline vacías | — |
+| `load_raw_data` | Carga `data/penguins.csv` **sin preprocesamiento**: todas las columnas como texto, los `NA` y el `.` quedan literales | `penguins_raw` (344 filas) |
+| `preprocess_data` | Lee `penguins_raw`, convierte los marcadores de nulo, castea los numéricos, normaliza `island`/`sex`, elimina incompletas y duplicadas, y asigna un split estratificado 80/20 (`random_state=42`) | `penguins_processed` (333 filas, columna `split`) |
+| `train_model` | Lee **solo** `penguins_processed`, entrena los tres algoritmos con `penguins_ml.training.build_pipeline`, evalúa sobre las filas `test` y publica una versión nueva con `registry.save_version` | `modelo_vN/` en el volumen, `autor: airflow` |
+
+Las dos tablas conviven: la cruda nunca se modifica, la procesada se reconstruye en cada corrida. El acceso a PostgreSQL se hace con el ORM de **SQLAlchemy** (modelos `PenguinRaw` y `PenguinProcessed`).
+
+`OneHotEncoder` y `StandardScaler` **no** se aplican en la tabla procesada: viven dentro del `Pipeline` de scikit-learn que se serializa. Así el modelo sigue recibiendo las seis medidas crudas y el contrato de `POST /predict` no cambia entre versiones entrenadas por Jupyter y por Airflow.
+
+### Servicios
+
+| Servicio | Imagen | Rol |
+|----------|--------|-----|
+| `airflow-webserver` · `scheduler` · `worker` · `triggerer` | `penguins-airflow:2.10.5` (`Dockerfile.airflow`) | Airflow con `CeleryExecutor` |
+| `postgres` | `postgres:13` | Metadatos de Airflow |
+| `postgres-penguins` | `postgres:17` | Datos del pipeline, publicado en `localhost:5432` |
+| `redis` | `redis:latest` | Broker de Celery |
+| `api-penguins` | `penguins-api:2.0.0` | La misma API, con el volumen de modelos en solo lectura |
+
+### Por qué existe `Dockerfile.airflow`
+
+La imagen oficial de Airflow no trae scikit-learn y, en su variante por defecto, corre un Python donde la versión instalable no coincide con la del `uv.lock`. Un `.pkl` solo se puede cargar con la **misma versión de scikit-learn** que lo escribió, así que `Dockerfile.airflow` extiende `apache/airflow:2.10.5-python3.12` con exactamente `scikit-learn==1.9.0` y `joblib==1.6.0`, los mismos que usa la API. Si se cambia scikit-learn en `pyproject.toml`, hay que actualizar también ese archivo y reconstruir.
+
+> ℹ️ Airflow importa `dill`, que modifica la tabla de serialización del `pickle` estándar que `joblib` hereda. El DAG llama a `dill.extend(use_dill=False)` al importarse, antes de cualquier `import sklearn`; sin eso, los `.pkl` quedan con referencias a `dill` y la API, que no lo tiene instalado, no puede cargarlos.
+
+### Variables de entorno
+
+| Variable | Default | Uso |
+|----------|---------|-----|
+| `AIRFLOW_UID` | `50000` (`.env` fija `501` en macOS) | Usuario con el que corren los contenedores de Airflow |
+| `PENGUINS_DB_URI` | `postgresql+psycopg2://penguins:penguins@postgres-penguins:5432/penguins` | Conexión del DAG a la base de datos |
+| `PENGUINS_CSV_PATH` | `/opt/airflow/data/penguins.csv` | Origen de `load_raw_data` |
+| `MODELS_DIR` | `/models` | Destino de `train_model`; el mismo que lee la API |
+
+### Comandos útiles
+
+```bash
+docker compose -f docker-compose.airflow.yml up -d --build     # levantar todo
+docker compose -f docker-compose.airflow.yml ps                # estado y healthchecks
+
+# Ejecutar el DAG completo en el worker (sin pasar por el scheduler)
+docker compose -f docker-compose.airflow.yml exec airflow-worker airflow dags test penguins_pipeline
+
+# Dispararlo como una corrida real
+docker compose -f docker-compose.airflow.yml exec airflow-worker airflow dags unpause penguins_pipeline
+docker compose -f docker-compose.airflow.yml exec airflow-worker airflow dags trigger penguins_pipeline
+
+# Inspeccionar las tablas
+docker compose -f docker-compose.airflow.yml exec postgres-penguins psql -U penguins -d penguins -c "\dt"
+
+docker compose -f docker-compose.airflow.yml down              # baja todo, los volúmenes se conservan
+```
+
+Desde un cliente como TablePlus o DBeaver: host `127.0.0.1`, puerto `5432`, base `penguins`, usuario y contraseña `penguins`.
 
 ---
 
@@ -343,8 +461,9 @@ Git + GitHub como mecanismo de control y trazabilidad.
 | Git / GitHub | Código y versiones |
 | `uv.lock` | Dependencias exactas en las dos imágenes |
 | `modelo_vN/metadata.json` | Qué se entrenó, con qué datos, con qué entorno y con qué métricas |
-| `Dockerfile` | Entorno de ejecución |
-| Volumen `penguins_modelos` | Historial completo de modelos |
+| `Dockerfile` · `Dockerfile.airflow` | Entorno de ejecución, con la misma versión de scikit-learn en todos los contenedores |
+| Volumen `penguins_modelos` | Historial completo de modelos, compartido por las dos variantes |
+| Tablas `penguins_raw` · `penguins_processed` | Datos exactamente como llegaron y datos exactamente como se entrenaron |
 
 **Ciclo ante un cambio de modelo**
 
@@ -364,10 +483,13 @@ penguins/
 │   └── training.py               # entrenamiento y métricas
 ├── scripts/train.py              # CLI de entrenamiento
 ├── notebooks/01_entrenamiento.ipynb
+├── dags/penguins_pipeline_dag.py # DAG de Airflow: wipe → load raw → preprocess → train
 ├── data/penguins.csv             # Dataset
 ├── tests/api.http                # Pruebas con REST Client
-├── docker-compose.yml            # Dos servicios + volumen compartido
+├── docker-compose.yml            # Jupyter + API + volumen compartido
+├── docker-compose.airflow.yml    # Airflow + PostgreSQL + API + el mismo volumen
 ├── Dockerfile                    # Multi-stage, targets `api` y `jupyter`
+├── Dockerfile.airflow            # Airflow + scikit-learn fijado igual que en uv.lock
 ├── .dockerignore
 ├── .gitignore
 ├── pyproject.toml                # Dependencias + grupo `jupyter`
@@ -382,11 +504,12 @@ penguins/
 ## Síntesis técnica
 
 1. Preparación de datos.
-2. Entrenamiento y comparación de tres algoritmos por versión.
-3. Publicación atómica en un volumen versionado.
-4. Descubrimiento en caliente desde la API REST.
-5. Selección de versión y algoritmo desde Swagger.
-6. Contenerización con Docker Compose.
-7. Despliegue en VM.
+2. Orquestación con Airflow: carga cruda en PostgreSQL, preprocesamiento a una segunda tabla y entrenamiento desde ella.
+3. Entrenamiento y comparación de tres algoritmos por versión.
+4. Publicación atómica en un volumen versionado.
+5. Descubrimiento en caliente desde la API REST.
+6. Selección de versión y algoritmo desde Swagger.
+7. Contenerización con Docker Compose.
+8. Despliegue en VM.
 
 El diseño separa entrenamiento, almacenamiento e inferencia, y deja una base reproducible para evolucionar hacia un esquema productivo con CI/CD, monitoreo, autenticación, HTTPS, gestión de secretos y un registro formal de modelos (MLflow).
