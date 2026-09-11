@@ -1,5 +1,11 @@
-"""API de inferencia: expone los modelos que el equipo de desarrollo publica
-en el volumen compartido. Sin frontend propio: todo se opera desde Swagger.
+"""API de inferencia: expone los modelos publicados en el volumen compartido,
+ya sea desde el contenedor de Jupyter o desde el DAG `penguins_pipeline` de
+Airflow. Sin frontend propio: todo se opera desde Swagger.
+
+La API no depende de quién entrena. Depende del contrato del registry
+(`penguins_ml.registry`): una carpeta `modelo_vN` con `metadata.json` y los
+`.pkl` de cada algoritmo. Cualquier productor que respete ese contrato queda
+disponible para inferencia sin cambios en este código.
 
 Dos ideas sostienen el requisito del taller —que el equipo de pruebas pueda
 elegir entre las versiones que existan en cada momento—:
@@ -31,8 +37,10 @@ from penguins_ml import registry
 DESCRIPCION = """
 Clasificador de especies de pingüinos del archipiélago Palmer.
 
-Los modelos los entrena el equipo de desarrollo en el contenedor de Jupyter y se
-publican en el volumen compartido. Esta API los descubre sola.
+Los modelos se entrenan en el contenedor de Jupyter o en el DAG `penguins_pipeline`
+de Airflow, que carga el CSV en PostgreSQL, lo preprocesa y entrena desde la tabla
+procesada. En ambos casos se publican en el volumen compartido y esta API los
+descubre sola. El campo `autor` de cada versión indica quién la entrenó.
 
 **Cómo elegir un modelo**
 
@@ -286,8 +294,9 @@ def openapi_dinamico() -> dict[str, Any]:
         nota = f"\n\n**Versiones en el volumen ahora mismo:** {detalle}."
     else:
         nota = (
-            "\n\n**El volumen todavía está vacío.** Entrená la primera versión con "
-            "`docker compose exec jupyter python scripts/train.py` y refrescá esta página."
+            "\n\n**El volumen todavía está vacío.** Entrene la primera versión ejecutando "
+            "el DAG `penguins_pipeline` en Airflow o con "
+            "`docker compose exec jupyter python scripts/train.py`, y refresque esta página."
         )
     esquema["info"]["description"] = esquema["info"].get("description", "") + nota
 
